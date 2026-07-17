@@ -107,8 +107,23 @@ namespace MonoDevelop.MSBuild.Tests.Classification
 			AssertRunCount (runs, "%(", typeMap.ExpressionDelimiter, 1);
 			AssertRunCount (runs, ")", typeMap.ExpressionDelimiter, 4);
 
-			// comments
-			AssertRunCount (runs, "<!-- comment -->", typeMap.Comment);
+			// comments: delimiters are classified separately, like the VS XML editor does
+			AssertRunCount (runs, "<!--", typeMap.Delimiter);
+			AssertRunCount (runs, " comment ", typeMap.Comment);
+			AssertRunCount (runs, "-->", typeMap.Delimiter);
+
+			// XML punctuation, like the VS XML editor: open tags, close tags, self-closing tags
+			AssertRunCount (runs, "<", typeMap.Delimiter, 4);
+			AssertRunCount (runs, ">", typeMap.Delimiter, 6);
+			AssertRunCount (runs, "</", typeMap.Delimiter, 3);
+			AssertRunCount (runs, "/>", typeMap.Delimiter, 1);
+
+			// attribute equals signs and quotes
+			AssertRunCount (runs, "=", typeMap.Delimiter, 2);
+			AssertRunCount (runs, "\"", typeMap.AttributeQuotes, 4);
+
+			// non-expression segments of element text are classified as XML text
+			AssertRunCount (runs, ";", typeMap.Text, 2);
 		}
 
 		[Test]
@@ -135,9 +150,50 @@ namespace MonoDevelop.MSBuild.Tests.Classification
 			List<(string Text, ClassificationTag Tag)> runs = await GetClassificationsAsync (
 				@"<?xml version=""1.0""?><A><![CDATA[xyz]]></A>");
 
-			AssertRunCount (runs, @"<?xml version=""1.0""?>", typeMap.ProcessingInstruction);
-			AssertRunCount (runs, "<![CDATA[xyz]]>", typeMap.CDataSection);
+			// processing instruction: delimiters, name, and content are classified separately
+			AssertRunCount (runs, "<?", typeMap.Delimiter);
+			AssertRunCount (runs, "xml", typeMap.ElementName);
+			AssertRunCount (runs, @" version=""1.0""", typeMap.ProcessingInstruction);
+			AssertRunCount (runs, "?>", typeMap.Delimiter);
+
+			// CDATA: delimiters and content are classified separately
+			AssertRunCount (runs, "<![CDATA[", typeMap.Delimiter);
+			AssertRunCount (runs, "xyz", typeMap.CDataSection);
+			AssertRunCount (runs, "]]>", typeMap.Delimiter);
+
 			AssertRunCount (runs, "A", typeMap.ElementName, 2);
+		}
+
+		[Test]
+		public async Task EntityReferenceClassifications ()
+		{
+			MSBuildClassificationTypeMap typeMap = CreateTypeMap ();
+
+			List<(string Text, ClassificationTag Tag)> runs = await GetClassificationsAsync (
+				@"<Project><A Condition=""x &gt; y"">a &amp; b</A></Project>");
+
+			// entity references in attribute values and element text
+			AssertRunCount (runs, "&gt;", typeMap.EntityReference);
+			AssertRunCount (runs, "&amp;", typeMap.EntityReference);
+
+			// the segments around them keep the attribute value / text classification
+			AssertRunCount (runs, "x ", typeMap.AttributeValue);
+			AssertRunCount (runs, " y", typeMap.AttributeValue);
+			AssertRunCount (runs, "a ", typeMap.Text);
+			AssertRunCount (runs, " b", typeMap.Text);
+		}
+
+		[Test]
+		public async Task UnclosedCommentDoesNotThrow ()
+		{
+			MSBuildClassificationTypeMap typeMap = CreateTypeMap ();
+
+			List<(string Text, ClassificationTag Tag)> runs = await GetClassificationsAsync ("<Project><!-- oops");
+
+			AssertRunCount (runs, "Project", typeMap.ElementName);
+			AssertRunCount (runs, "<!--", typeMap.Delimiter);
+			AssertRunCount (runs, " oops", typeMap.Comment);
+			AssertRunCount (runs, "-->", typeMap.Delimiter, 0);
 		}
 
 		[Test]

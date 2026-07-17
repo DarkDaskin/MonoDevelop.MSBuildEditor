@@ -84,7 +84,7 @@ namespace MonoDevelop.MSBuild.Editor
 			if (typeof (T).IsAssignableFrom (typeof (ClassificationTag))) {
 				return (ITagger<T>)(object)buffer.Properties.GetOrCreateSingletonProperty (() => {
 					ILogger logger = loggerFactory.GetLogger<MSBuildClassificationTagger> (buffer);
-					LogUsingFallbackClassifier (logger, TextMateSupport.HostDescription);
+					LogUsingFallbackClassifier (logger, TextMateSupport.HostDescription, typeMap.ResolvedTypeNames);
 					return new MSBuildClassificationTagger (buffer, parserProvider, typeMap, joinableTaskContext, logger);
 				});
 			}
@@ -92,7 +92,7 @@ namespace MonoDevelop.MSBuild.Editor
 			return null;
 		}
 
-		[LoggerMessage (EventId = 0, Level = LogLevel.Information, Message = "TextMate classification unavailable ({hostDescription}), using built-in MSBuild classification tagger")]
-		static partial void LogUsingFallbackClassifier (ILogger logger, string hostDescription);
+		[LoggerMessage (EventId = 0, Level = LogLevel.Information, Message = "TextMate classification unavailable ({hostDescription}), using built-in MSBuild classification tagger with classification types: {resolvedTypeNames}")]
+		static partial void LogUsingFallbackClassifier (ILogger logger, string hostDescription, string resolvedTypeNames);
 	}
 }
